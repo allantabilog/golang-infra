@@ -1,0 +1,1 @@
+This is an example page created using this simple wiki application

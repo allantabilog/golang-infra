@@ -1,0 +1,6 @@
+An example wiki system that demonstrates the use of
+
+- net/http package
+- html/template
+- file I/O operations
+  Taken from https://go.dev/doc/articles/wiki/
