@@ -72,8 +72,10 @@ func handleRequest(conn net.Conn) {
 		handleEchoRequest(requestLine.Path, conn)
 	case strings.HasPrefix(requestLine.Path, "/user-agent"):
 		handleUserAgentRequest(headers, conn)
-	case strings.HasPrefix(requestLine.Path, "/files"):		
-		handleFileRequest(requestLine.Path, conn)		
+	case requestLine.Verb == "GET" && strings.HasPrefix(requestLine.Path, "/files"):		
+		handleFileRequest(requestLine.Path, conn)	
+	case requestLine.Verb == "POST" && strings.HasPrefix(requestLine.Path, "/files"):					
+		handlePostRequest(request, conn)
 	default:
 		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 	}
@@ -121,4 +123,36 @@ func handleFileRequest(path string, conn net.Conn) {
 	// construct the response
 	response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", len(fileContents), fileContents)
 	conn.Write([]byte(response))
+}
+
+func handlePostRequest(request string, conn net.Conn) {
+
+	// extract the body from the request
+	requestParser := RequestParserImpl{}
+	body, err := requestParser.parseBody(request)
+	if err != nil {
+		fmt.Println("Failed to parse body")
+		conn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
+		return
+	}
+	fmt.Printf("The body is: %v\n", body)
+
+	// extract the filename from the request
+	requestLine, err := requestParser.parseRequestLine(request)
+	if err != nil {
+		fmt.Println("Failed to parse request line")
+		conn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
+		return
+	}
+
+	filename := strings.Split(requestLine.Path, "/")[2]
+	
+	// write the body to the file with filename
+	err = os.WriteFile(fmt.Sprintf("/tmp/data/codecrafters.io/http-server-tester/%s", filename), []byte(body), 0644)
+	if err != nil {
+		fmt.Println("Failed to write file")
+		conn.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+		return
+	}
+	conn.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
 }
