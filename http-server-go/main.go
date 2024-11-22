@@ -45,7 +45,7 @@ func handleRequest(conn net.Conn) {
 
 	request := string(buf[:n])
 
-	var requestParser = RequestParserImpl{}
+	requestParser := RequestParserImpl{}
 	requestLine, err := requestParser.parseRequestLine(request)
 
 	if err != nil {
@@ -60,12 +60,28 @@ func handleRequest(conn net.Conn) {
 
 	switch {
 	case requestLine.Path == "/":
-		conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+		handleRootRequest(requestLine.Path, conn)
 	case strings.HasPrefix(requestLine.Path, "/echo"):
-		conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+		handleEchoRequest(requestLine.Path, conn)
 	case strings.HasPrefix(requestLine.Path, "/user-agent"):
 		conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
 	default:
 		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 	}
+}
+
+func handleRootRequest(path string, conn net.Conn) {
+	conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+}
+
+func handleEchoRequest(path string, conn net.Conn) {
+	fmt.Printf("handling echo request for path: %v\n", path)
+	// extract the message from the path
+	message := strings.Split(path, "/")[2]
+	fmt.Printf("The message is: %v\n", message)
+
+	// construct the response
+	response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message)
+
+	conn.Write([]byte(response))
 }

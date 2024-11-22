@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -146,6 +147,31 @@ func TestParseBody(t *testing.T) {
 		}
 		if body != tc.expectedBody {
 			t.Errorf("Expected %s, got %s", tc.expectedBody, body)
+		}
+	}
+}
+
+func TestStringsSplit(t *testing.T) {
+	testCases := []struct {
+		input  string
+		sep    string
+		output []string
+	}{
+		{"a,b,c", ",", []string{"a", "b", "c"}},
+		{"a,b,c", ":", []string{"a,b,c"}},
+		{"a/b/c", "/", []string{"a", "b", "c"}},
+		{"/echo/hello", "/", []string{"", "echo", "hello"}},
+	}
+
+	for _, tc := range testCases {
+		output := strings.Split(tc.input, tc.sep)
+		if len(output) != len(tc.output) {
+			t.Errorf("Expected %d elements, got %d", len(tc.output), len(output))
+		}
+		for i, v := range output {
+			if v != tc.output[i] {
+				t.Errorf("Expected %s, got %s", tc.output[i], v)
+			}
 		}
 	}
 }
