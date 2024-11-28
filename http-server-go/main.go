@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"net"
 	"os"
@@ -64,12 +66,13 @@ func handleRequest(conn net.Conn) {
 	fmt.Printf("verb: %v\n", requestLine.Verb)
 	fmt.Printf("path: %v\n", requestLine.Path)
 	fmt.Printf("version: %v\n", requestLine.Version)
+	fmt.Printf("headers: %v\n", headers)	
 
 	switch {
 	case requestLine.Path == "/":
 		handleRootRequest(requestLine.Path, conn)
 	case strings.HasPrefix(requestLine.Path, "/echo"):
-		handleEchoRequest(requestLine.Path, conn)
+		handleEchoRequest(requestLine.Path, headers, conn)
 	case strings.HasPrefix(requestLine.Path, "/user-agent"):
 		handleUserAgentRequest(headers, conn)
 	case requestLine.Verb == "GET" && strings.HasPrefix(requestLine.Path, "/files"):		
@@ -85,16 +88,40 @@ func handleRootRequest(path string, conn net.Conn) {
 	conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
 }
 
-func handleEchoRequest(path string, conn net.Conn) {
+func handleEchoRequest(path string, headers map[string] string, conn net.Conn) {
 	fmt.Printf("handling echo request for path: %v\n", path)
+	// check for an accept-encoding header
+	var contentEncoding string
+	acceptEncoding, ok := headers["Accept-Encoding"]
+	if ok {
+		// check if the header contains gzip
+		// this should support multiple (comma-separated) list of encodings
+		if strings.Contains(acceptEncoding, "gzip") {
+			contentEncoding = "gzip"
+		}
+	}
+
 	// extract the message from the path
 	message := strings.Split(path, "/")[2]
 	fmt.Printf("The message is: %v\n", message)
-
-	// construct the response
-	response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message)
-
-	conn.Write([]byte(response))
+	var response string
+	if (contentEncoding == "gzip") {
+		// add a content-encoding header to the response
+		
+		// gzip-compress the message
+		compressedMessage, err := gzipCompress(message)
+		if err != nil {
+			fmt.Println("Failed to compress message")
+			conn.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n\r\n"))
+		}
+		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\nContent-Encoding: %s\r\n\r\n%s", len(compressedMessage), contentEncoding, compressedMessage)
+		conn.Write([]byte(response))
+		
+	} else {
+		// normal response without content-encoding
+		response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message)
+		conn.Write([]byte(response))
+	}
 }
 
 func handleUserAgentRequest(headers map[string]string, conn net.Conn) {
@@ -114,7 +141,7 @@ func handleFileRequest(path string, conn net.Conn) {
 	fmt.Printf("The filename is: %v\n", filename)
 
 	// read the file contents
-	fileContents, err := os.ReadFile(fmt.Sprintf("/tmp/%s", filename))
+	fileContents, err := os.ReadFile(fmt.Sprintf("/tmp/data/codecrafters.io/http-server-tester/%s", filename))
 	if err != nil {
 		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 		return
@@ -155,4 +182,17 @@ func handlePostRequest(request string, conn net.Conn) {
 		return
 	}
 	conn.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
+}
+
+func gzipCompress(data string) ([]byte, error) {
+	var buf bytes.Buffer 
+	gzipWriter := gzip.NewWriter(&buf)
+	_, err := gzipWriter.Write([]byte(data))
+	if err != nil {
+		return nil, err
+	}
+	if err := gzipWriter.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
